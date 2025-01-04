@@ -42,4 +42,4 @@ Pipeline de agregación. $match, $project, $group, $lookup. Modelado de distinto
 relaciones en MongoDB. Creación de índices en MongoDB
 
 
-Ver repositorio con la parte de MondgoDB aquí: [Repositorio NoSQL](https://github.com/Conyweasley/SQL)
+Ver repositorio con la parte de MondgoDB aquí: [Repositorio SQL](https://github.com/Conyweasley/SQL)
