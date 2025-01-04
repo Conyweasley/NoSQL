@@ -37,6 +37,9 @@ CRUD en MongoDB. Sintaxis típica de una consulta en MongoDB. Operaciones Insert
 InsertMany. Operación Find. Operadores de comparación. Consultas en arreglos. Consultas en
 documentos embebidos. Operaciones updateOne y updateMany. Operaciones deleteOne y
 deleteMany. Operadores de consulta, de proyección y de actualización.
+### Asuntos avanzados de MongoDB
+Pipeline de agregación. $match, $project, $group, $lookup. Modelado de distintos tipos de
+relaciones en MongoDB. Creación de índices en MongoDB
 
 
 Ver repositorio con la parte de MondgoDB aquí: [Repositorio NoSQL](https://github.com/Conyweasley/SQL)
