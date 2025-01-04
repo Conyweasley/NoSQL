@@ -1,0 +1,429 @@
+// Cantidad de cines (theaters) por estado.
+
+use('mflix')
+db.theaters.aggregate([
+    {
+        $group:{
+            "_id": "$location.address.state",
+            "conteo":{$sum:1}
+        }
+    }
+])
+
+db.theaters.findOne()
+
+// Cantidad de estados con al menos dos cines (theaters) registrados.
+
+db.theaters.aggregate([
+    {
+        $group:{
+            "_id": "$location.address.state",
+            "conteo":{$sum:1}
+        }
+    },
+    {
+        $match:{
+            "conteo":{$gte: 2}
+        }
+    },
+    {
+        $count: "conteo total"
+    }
+])
+
+// Cantidad de películas dirigidas por "Louis Lumière". Se puede responder sin pipeline de agregación, realizar ambas queries.
+
+//con countDocuments
+
+db.movies.countDocuments({ directors: "Louis Lumière" });
+
+//con find
+
+db.movies.find(
+    { "directors": {$in:["Louis Lumière"]}
+    }
+).count()
+
+// otra forma, el equal no implica que sea exactamente igual, sino que sea igual a alguno de los elementos del array
+db.movies.find({ directors: "Louis Lumière" })
+
+//con pipeline de agregación
+
+db.movies.aggregate([
+    {
+        $match:{
+            "directors":{
+                $in: ["Louis Lumière"]
+            }
+        }
+    },
+    {
+        $count: "Cantidad de peliculas dirigidas por Louis Lumiere"
+    }
+])
+
+// Cantidad de películas estrenadas en los años 50 (desde 1950 hasta 1959). Se puede responder sin pipeline de agregación, realizar ambas queries.
+
+db.movies.aggregate([
+    {
+        $match:{
+            "year":{
+                $gte: 1950,
+                $lte: 1959
+            }
+        }
+    },
+    {
+        $count: "cantidad de peliculas estrenadas en los años 50"
+    }
+])
+
+db.movies.find(
+    {
+        "year":{
+            $gte: 1950,
+            $lte: 1959,
+        }
+    }
+).count()
+
+
+/*
+Listar los 10 géneros con mayor cantidad de películas (tener en cuenta que las películas pueden tener más de un género). 
+Devolver el género y la cantidad de películas. Hint: unwind puede ser de utilidad
+ */
+
+db.movies.aggregate([
+    {
+        $unwind: "$genres"
+    },
+    {
+        $group: {
+            "_id": "$genres",
+            "conteo": {$sum:1}
+        }
+    },
+    {
+        $sort:{
+            "conteo":-1
+        }
+    },
+    {$limit: 10}
+])
+
+// Top 10 de usuarios con mayor cantidad de comentarios, mostrando Nombre, Email y Cantidad de Comentarios.
+
+
+db.comments.aggregate([
+    {
+        $group:{
+            "_id": "$email",
+            "cant_comentarios": {$sum:1},
+            "name": {$first: "$name"}
+        }
+    },
+    {
+        $sort:{
+            "cant_comentarios":-1
+        }
+    },
+    {
+        $limit: 10
+    },
+
+    {
+        $project: {
+            "_id": 0,
+            "Nombre": "$name",
+            "email": "$_id",
+            "Cantidad de comentarios": "$cant_comentarios"
+        }
+    }
+])
+
+/* Ratings de IMDB promedio, mínimo y máximo por año de las películas estrenadas en los años 80 (desde 1980 hasta 1989),
+ ordenados de mayor a menor por promedio del año.
+*/
+
+
+db.movies.aggregate([
+    {
+        $match:{
+            "year":{
+                $gte: 1980,
+                $lte: 1989
+            },
+            "imdb.rating": { $type: "double" }
+        }
+    },
+    {
+        $group:{
+            "_id": "$year",
+            "avg_imdb_rating": {$avg: "$imdb.rating"},
+            "minimo": {$min: "$imdb.rating"},
+            "maximo": {$max: "$imdb.rating"}
+        }
+    },
+    {
+        $sort:{
+            "avg_imdb_rating":-1
+        }
+    },
+    {
+        $project:{
+            "_id":0,
+            "Año": "$_id",
+            "IMDB promedio": "$avg_imdb_rating",
+            "IMDB minimo": "$minimo",
+            "IMDB maximo": "$maximo"
+        }
+    }
+])
+
+// Título, año y cantidad de comentarios de las 10 películas con más comentarios.
+
+db.movies.aggregate([
+    {
+        $lookup: {
+          from: "comments",
+          localField: "_id",
+          foreignField: "movie_id",
+          as: "movies_comments"
+        }
+    },
+    {
+        $project:{
+            "_id":0,
+            "Nombre":"$title",
+            "Año": "$year",
+            "Cantidad de comentarios":{$size: "$movies_comments"}
+        }
+    },
+    {
+        $sort:{
+            "Cantidad de comentarios":-1
+        }
+    },
+    {
+        $limit:10
+    }
+])
+
+// Crear una vista con los 5 géneros con mayor cantidad de comentarios, 
+//junto con la cantidad de comentarios.
+
+db.createView(
+    "nueva_vista",
+    "movies",
+    [
+        {
+            $lookup: {
+              from: "comments",
+              localField: "_id",
+              foreignField: "movie_id",
+              as: "movie_comments"
+            }
+        },
+        {
+            $unwind:"$genres"
+        },
+        {
+            $group:{
+                "_id": "$genres",
+                "suma_comm": {$sum: {$size: "$movie_comments"}}
+            }
+        },
+        {
+            $sort:{
+                "suma_comm": -1
+            }
+        },
+        {
+            $limit:5
+        },
+    ]
+)
+
+db.nueva_vista.drop()
+
+db.nueva_vista.find()
+
+/* Listar los actores (cast) que trabajaron en 2 o más películas dirigidas por "Jules Bass". 
+Devolver el nombre de estos actores junto con la lista de películas (solo título y año) dirigidas por “Jules Bass” en las que trabajaron. 
+Hint1: addToSet
+Hint2: {'name.2': {$exists: true}} permite filtrar arrays con al menos 2 elementos, entender por qué.
+Hint3: Puede que tu solución no use Hint1 ni Hint2 e igualmente sea correcta
+ */
+
+db.movies.aggregate([
+    {
+        $match: {
+            "directors": "Jules Bass"
+        }
+    },
+    {
+        $unwind: "$cast"
+    },
+    {
+        $group:{
+            "_id": "$cast",
+            "peliculas": { $addToSet: "$title" },
+        }
+    },
+    {
+        $project:{
+            "_id": 0,
+            "Actor": "$_id",
+            "Cantidad de peliculas": {$size:"$peliculas"},
+            "Peliculas": "$peliculas"
+        }
+    },
+    {
+        $match:{
+            "Cantidad de peliculas":{
+                $gte: 2
+            }
+        }
+    }
+])
+
+db.comments.findOne()
+
+/*
+Listar los usuarios que realizaron comentarios durante el mismo mes de lanzamiento de la película comentada, 
+mostrando Nombre, Email, fecha del comentario, título de la película, fecha de lanzamiento. HINT: usar $lookup con
+ multiple condiciones 
+
+ */
+
+db.comments.aggregate([
+    {
+        $lookup: {
+            from: "movies",
+            let: {fecha_comentario: "$date", pelicula: "$movie_id"},
+            pipeline:[
+                {
+                    $match:{
+                        $expr:{
+                            $and:[
+                                { $eq:["$_id", "$$pelicula"] },
+                                { $eq:[{$month: "$released"}, {$month: "$$fecha_comentario"}]}
+                            ]
+                        }
+                    }
+                }
+            ],
+            as: "peliculas"
+        }
+    },
+    {
+        $unwind: "$peliculas"
+    },
+    {
+        $project: {
+            "_id":0,
+            "name":1,
+            "email":1,
+            "date":1,
+            "peliculas.title":1,
+            "peliculas.released":1                        
+        }
+    }
+])
+
+/*
+Listar el id y nombre de los restaurantes junto con su puntuación máxima, mínima y la suma total. Se puede asumir que el restaurant_id es único.
+Resolver con $group y accumulators.
+Resolver con expresiones sobre arreglos (por ejemplo, $sum) pero sin $group.
+Resolver como en el punto b) pero usar $reduce para calcular la puntuación total.
+Resolver con find.
+
+ */
+
+// con group
+db.restaurants.aggregate([
+    {
+        $unwind: "$grades"
+    },
+    {
+        $group:{
+            "_id": "$restaurant_id",
+            "suma":{ $sum: "$grades.score"},
+            "minimo":{ $min: "$grades.score"},
+            "maximo": {$max: "$grades.score"},
+            "name": { $first: "$name" }
+        }
+    },
+    {
+        $project:{
+            "name":1,
+            "Suma scores": "$suma",
+            "Mínimo scores": "$minimo",
+            "Máximo scores": "$maximo"
+        }
+    }
+])
+
+//expresiones sobre arreglos
+
+db.restaurants.aggregate([
+    {
+        $project: {
+            "_id":0,
+            "restaurant_id":1,
+            "name":1,
+            "minimo": {$min: "$grades.score"},
+            "maximo": {$max: "$grades.score"},
+            "suma": {$sum: "$grades.score"}
+        }
+    }
+])
+
+//con reduce
+
+db.restaurants.aggregate([
+    {
+        $project: {
+            "_id":0,
+            "restaurant_id":1,
+            "name":1,
+            "minimo": {$min: "$grades.score"},
+            "maximo": {$max: "$grades.score"},
+            suma:{
+                $reduce:{
+                    input: "$grades.score",
+                    initialValue: 0,
+                    in: {$add:["$$value", "$$this"]}
+                }
+            }
+        }
+    }
+])
+
+//usando find
+
+db.restaurants.find(
+    {},
+    {
+        "_id":0,
+        "restaurant_id":1,
+        "name":1,
+        "max_score":{$max: "$grades.score"},
+        "min_score":{$min: "$grades.score"},
+        "sum_score":{$sum: "$grades.score"}
+    }
+)
+
+/*
+Actualizar los datos de los restaurantes añadiendo dos campos nuevos. 
+"average_score": con la puntuación promedio
+"grade": con "A" si "average_score" está entre 0 y 13, 
+  con "B" si "average_score" está entre 14 y 27 
+  con "C" si "average_score" es mayor o igual a 28    
+Se debe actualizar con una sola query.
+HINT1. Se puede usar pipeline de agregación con la operación update
+HINT2. El operador $switch o $cond pueden ser de ayuda.
+
+*/
+
+db.restaurants.updateMany()
